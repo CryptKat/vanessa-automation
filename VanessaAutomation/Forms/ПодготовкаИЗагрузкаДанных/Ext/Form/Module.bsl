@@ -127,16 +127,20 @@ Procedure ICheckOrCreateCatalogObjectsAtServer(ObjectName, Values)
 	For Each ColumnName In ColumnsNames Do
 		ObjectAttributes.Columns.Delete(ColumnName);
 	EndDo;
+	RefColumnName = ?(ObjectAttributes.Columns.Find("Ref") <> Undefined, "Ref", "Ссылка");
 	For Each Row In ObjectValues Do
-		Ref = GetObjectLinkFromObjectURL(Row.Ref);
+		Ref = GetObjectLinkFromObjectURL(Row[RefColumnName]);
 		If ValueIsFilled(Ref.DataVersion) Then
 			Obj = Ref.GetObject();
 		Else
-			Predefined = StrFind(Row.Ref, "?refName=");
+			Predefined = StrFind(Row[RefColumnName], "?refName=");
 			If Predefined Then
 				Continue;
 			EndIf;
 			FoundColumn = ObjectAttributes.Columns.Find("IsFolder");
+			If FoundColumn = Undefined Then
+				FoundColumn = ObjectAttributes.Columns.Find("ЭтоГруппа");	
+			EndIf;
 			If FoundColumn <> Undefined
 				And Row[FoundColumn.Name] = "True" Then
 				Obj = Catalogs[ObjectName].CreateFolder();
@@ -150,22 +154,22 @@ Procedure ICheckOrCreateCatalogObjectsAtServer(ObjectName, Values)
 			If Row[Column.Name] = "" Then
 				Continue;
 			EndIf;
-			If Column.Name = "Ref" Then
+			If Column.Name = RefColumnName Then
 				Continue;
 			EndIf;
-			If Column.Name = "IsFolder" Then
+			If Column.Name = "IsFolder" Or Column.Name = "ЭтоГруппа" Then
 				Continue;
 			EndIf;
-			If Column.Name = "DeletionMark"
+			If (Column.Name = "DeletionMark" Or Column.Name = "ПометкаУдаления")
 				And Row[Column.Name] = "True" Then
 				Obj.DeletionMark = True;
 				Continue;
 			EndIf;
-			If Column.Name = "Parent" Then
+			If Column.Name = "Parent" Or Column.Name = "Родитель" Then
 				Obj[Column.Name] = GetObjectLinkFromObjectURL(Row[Column.Name]);
 				Continue;
 			EndIf;
-			If Column.Name = "Owner" Then
+			If Column.Name = "Owner" Or Column.Name = "Владелец" Then
 				Obj[Column.Name] = GetObjectLinkFromObjectURL(Row[Column.Name]);
 				Continue;
 			EndIf;
@@ -205,8 +209,9 @@ Procedure ICheckOrCreateDocumentObjectsAtServer(ObjectName, Values)
 	For Each ColumnName In ColumnsNames Do
 		ObjectAttributes.Columns.Delete(ColumnName);
 	EndDo;
+	RefColumnName = ?(ObjectAttributes.Columns.Find("Ref") <> Undefined, "Ref", "Ссылка");
 	For Each Row In ObjectValues Do
-		Ref = GetObjectLinkFromObjectURL(Row.Ref);
+		Ref = GetObjectLinkFromObjectURL(Row[RefColumnName]);
 		If ValueIsFilled(Ref.DataVersion) Then
 			Obj = Ref.GetObject();
 		Else
@@ -218,13 +223,13 @@ Procedure ICheckOrCreateDocumentObjectsAtServer(ObjectName, Values)
 			If Row[Column.Name] = "" Then
 				Continue;
 			EndIf;
-			If Column.Name = "Ref" Then
+			If Column.Name = RefColumnName Then
 				Continue;
 			EndIf;
-			If Column.Name = "Posted" Then
+			If Column.Name = "Posted" Or Column.Name = "Проведен" Then
 				Continue;
 			EndIf;
-			If Column.Name = "DeletionMark"
+			If (Column.Name = "DeletionMark" Or Column.Name = "ПометкаУдаления")
 				And Row[Column.Name] = "True" Then
 				Obj.DeletionMark = True;
 				Continue;
@@ -232,6 +237,9 @@ Procedure ICheckOrCreateDocumentObjectsAtServer(ObjectName, Values)
 			FillTipicalObjectAttributesByValues(Obj, Row, Column);
 		EndDo;
 		FoundColumn = ObjectAttributes.Columns.Find("Posted");
+		If FoundColumn = Undefined Then
+			FoundColumn = ObjectAttributes.Columns.Find("Проведен");	
+		EndIf;
 		If FoundColumn <> Undefined
 			And Row[Column.Name] = "True" Then
 			DocumentWriteModeValue = DocumentWriteMode.Posting;
@@ -278,12 +286,13 @@ Procedure ICheckOrCreateChartOfCharacteristicTypesObjectsAtServer(ObjectName, Va
 	For Each ColumnName In ColumnsNames Do
 		ObjectAttributes.Columns.Delete(ColumnName);
 	EndDo;
+	RefColumnName = ?(ObjectAttributes.Columns.Find("Ref") <> Undefined, "Ref", "Ссылка");
 	For Each Row In ObjectValues Do
-		Ref = GetObjectLinkFromObjectURL(Row.Ref);
+		Ref = GetObjectLinkFromObjectURL(Row[RefColumnName]);
 		If ValueIsFilled(Ref.DataVersion) Then
 			Obj = Ref.GetObject();
 		Else
-			Predefined = StrFind(Row.Ref, "?refName=");
+			Predefined = StrFind(Row[RefColumnName], "?refName=");
 			If Predefined Then
 				Continue;
 			EndIf;
@@ -295,10 +304,10 @@ Procedure ICheckOrCreateChartOfCharacteristicTypesObjectsAtServer(ObjectName, Va
 			If Row[Column.Name] = "" Then
 				Continue;
 			EndIf;
-			If Column.Name = "Ref" Then
+			If Column.Name = RefColumnName Then
 				Continue;
 			EndIf;
-			If Column.Name = "DeletionMark"
+			If (Column.Name = "DeletionMark" Or Column.Name = "ПометкаУдаления")
 				And Row[Column.Name] = "True" Then
 				Obj.DeletionMark = True;
 				Continue;
@@ -331,11 +340,12 @@ EndProcedure
 &AtServerNoContext
 Procedure IRefillObjectTabularSectionAtServer(TabularSectionName, Values)	
 	ObjectValues = GetValueTableFromVanessaTableArray(Values);
-	ObjectValues.Indexes.Add("Ref");
-	ObjectsRefs = ObjectValues.Copy(, "Ref");
-	ObjectsRefs.GroupBy("Ref");
+	RefColumnName = ?(ObjectValues.Columns.Find("Ref") <> Undefined, "Ref", "Ссылка");
+	ObjectValues.Indexes.Add(RefColumnName);
+	ObjectsRefs = ObjectValues.Copy(, RefColumnName);
+	ObjectsRefs.GroupBy(RefColumnName);
 	ObjectAttributes = New ValueTable;
-	Ref = GetObjectLinkFromObjectURL(ObjectValues[0].Ref);
+	Ref = GetObjectLinkFromObjectURL(ObjectValues[0][RefColumnName]);
 	FillColumnsByTabularSectionAttributes(ObjectAttributes, Ref.Metadata().TabularSections[TabularSectionName].Attributes);
 	ColumnsNames = New Array;
 	For Each Column In ObjectAttributes.Columns Do
@@ -349,9 +359,9 @@ Procedure IRefillObjectTabularSectionAtServer(TabularSectionName, Values)
 	
 	For Each ObjectsRefsRow In ObjectsRefs Do
 		ObjectValuesFilter = New Structure;
-		ObjectValuesFilter.Insert("Ref", ObjectsRefsRow.Ref);
+		ObjectValuesFilter.Insert(RefColumnName, ObjectsRefsRow[RefColumnName]);
 		FoundObjectValuesRows = ObjectValues.FindRows(ObjectValuesFilter);
-		Ref = GetObjectLinkFromObjectURL(ObjectsRefsRow.Ref);
+		Ref = GetObjectLinkFromObjectURL(ObjectsRefsRow[RefColumnName]);
 		If ValueIsFilled(Ref.DataVersion) Then
 			FillingObj = Ref.GetObject();
 			FillingObj[TabularSectionName].Clear();
@@ -364,7 +374,7 @@ Procedure IRefillObjectTabularSectionAtServer(TabularSectionName, Values)
 				If Row[Column.Name] = "" Then
 					Continue;
 				EndIf;
-				If Column.Name = "Ref" Then
+				If Column.Name = RefColumnName Then
 					Continue;
 				EndIf;
 				FillTipicalObjectAttributesByValues(Obj, Row, Column);
@@ -405,26 +415,32 @@ Procedure ICheckOrCreateInformationRegisterRecordsAtServer(RegisterName, Values)
 	For Each ColumnName In ColumnsNames Do
 		ObjectAttributes.Columns.Delete(ColumnName);
 	EndDo;
-	If ObjectAttributes.Columns.Find("Recorder") <> Undefined Then
-		RecorderTable = ObjectValues.Copy(, "Recorder");
-		RecorderTable.GroupBy("Recorder");
+	
+	RecorderColumn = ObjectAttributes.Columns.Find("Recorder");
+	If RecorderColumn = Undefined Then
+		RecorderColumn = ObjectAttributes.Columns.Find("Регистратор");
+	EndIf;
+	If RecorderColumn <> Undefined Then
+		RecorderColumnName = RecorderColumn.Name;
+		RecorderTable = ObjectValues.Copy(, RecorderColumnName);
+		RecorderTable.GroupBy(RecorderColumnName);
 		For Each RecorderRow In RecorderTable Do
 			RegisterSet = InformationRegisters[RegisterName].CreateRecordSet();
 			RecorderFilter = New Structure;
-			RecorderFilter.Insert("Recorder", RecorderRow.Recorder);
+			RecorderFilter.Insert(RecorderColumnName, RecorderRow[RecorderColumnName]);
 			FoundRows = ObjectValues.FindRows(RecorderFilter);
-			RecorderRef = GetObjectLinkFromObjectURL(RecorderRow.Recorder);
-			RegisterSet.Filter.Recorder.Set(RecorderRef);
+			RecorderRef = GetObjectLinkFromObjectURL(RecorderRow[RecorderColumnName]);
+			RegisterSet.Filter[RecorderColumnName].Set(RecorderRef);
 			For Each Row In FoundRows Do
 				Obj = RegisterSet.Add();
 				For Each Column In ObjectAttributes.Columns Do
 					If Row[Column.Name] = "" Then
 						Continue;
 					EndIf;
-					If Column.Name = "LineNumber" Then
+					If Column.Name = "LineNumber" Or Column.Name = "НомерСтроки" Then
 						Continue;
 					EndIf;
-					If Column.Name = "Recorder" Then
+					If Column.Name = RecorderColumnName Then
 						Row[Column.Name] = RecorderRef;
 						Continue;
 					EndIf;
@@ -479,30 +495,35 @@ Procedure ICheckOrCreateAccumulationRegisterRecordsAtServer(RegisterName, Values
 	For Each ColumnName In ColumnsNames Do
 		ObjectAttributes.Columns.Delete(ColumnName);
 	EndDo;
-	If ObjectAttributes.Columns.Find("Recorder") <> Undefined Then
-		RecorderTable = ObjectValues.Copy(, "Recorder");
-		RecorderTable.GroupBy("Recorder");
+	RecorderColumn = ObjectAttributes.Columns.Find("Recorder");
+	If RecorderColumn = Undefined Then
+		RecorderColumn = ObjectAttributes.Columns.Find("Регистратор");
+	EndIf;
+	If RecorderColumn <> Undefined Then
+		RecorderColumnName = RecorderColumn.Name;
+		RecorderTable = ObjectValues.Copy(, RecorderColumnName);
+		RecorderTable.GroupBy(RecorderColumnName);
 		For Each RecorderRow In RecorderTable Do
 			RegisterSet = AccumulationRegisters[RegisterName].CreateRecordSet();
 			RecorderFilter = New Structure;
-			RecorderFilter.Insert("Recorder", RecorderRow.Recorder);
+			RecorderFilter.Insert(RecorderColumnName, RecorderRow[RecorderColumnName]);
 			FoundRows = ObjectValues.FindRows(RecorderFilter);
-			RecorderRef = GetObjectLinkFromObjectURL(RecorderRow.Recorder);
-			RegisterSet.Filter.Recorder.Set(RecorderRef);
+			RecorderRef = GetObjectLinkFromObjectURL(RecorderRow[RecorderColumnName]);
+			RegisterSet.Filter[RecorderColumnName].Set(RecorderRef);
 			For Each Row In FoundRows Do
 				Obj = RegisterSet.Add();
 				For Each Column In ObjectAttributes.Columns Do
 					If Row[Column.Name] = "" Then
 						Continue;
 					EndIf;
-					If Column.Name = "LineNumber" Then
+					If Column.Name = "LineNumber" Or Column.Name = "НомерСтроки" Then
 						Continue;
 					EndIf;
-					If Column.Name = "Recorder" Then
+					If Column.Name = RecorderColumnName Then
 						Row[Column.Name] = RecorderRef;
 						Continue;
 					EndIf;
-					If Column.Name = "RecordType" Then
+					If Column.Name = "RecordType" Or Column.Name = "ВидДвижения" Then
 						Obj[Column.Name] = AccumulationRecordType[Row[Column.Name]];
 						Continue;
 					EndIf;
@@ -1362,7 +1383,6 @@ Function GetMarkdownTable(Val MetadataObjectPropertyName, Val MetadataObjectName
 			Continue;
 		EndIf;
 		ColumnName = Column.Name;
-		TransformStandardRussianAttributeName(ColumnName);
 		MarkdownFirst.Add("|'");
 		MarkdownFirst.Add(ColumnName);
 		MarkdownFirst.Add("'");
@@ -1520,62 +1540,6 @@ Procedure FormatGerkinTable(TableArray)
 		
 		TableArray[Ppp] = Chars.Tab + Chars.Tab + ParametersRow;
 	EndDo;
-EndProcedure
-
-&AtServerNoContext
-Procedure TransformStandardRussianAttributeName(AttributeName)
-	Str = New Map;
-	Str.Insert("ИмяПредопределенныхДанных", "PredefinedDataName");
-	Str.Insert("Код", "Code");
-	Str.Insert("Наименование", "Description");
-	Str.Insert("ПометкаУдаления", "DeletionMark");
-	Str.Insert("Предопределенный", "Predefined");
-	Str.Insert("Ссылка", "Ref");
-	Str.Insert("ВидДвижения", "RecordType");
-	Str.Insert("Активность", "Active");
-	Str.Insert("НомерСтроки", "LineNumber");
-	Str.Insert("Регистратор", "Recorder");
-	Str.Insert("Период", "Period");
-	Str.Insert("ТипЗначения", "ValueType");
-	Str.Insert("ЭтоГруппа", "IsFolder");
-	Str.Insert("Родитель", "Parent");
-	Str.Insert("Порядок", "Order");
-	Str.Insert("ВидыСубконто", "ExtDimensionTypes");
-	Str.Insert("ТолькоОбороты", "TurnoversOnly");
-	Str.Insert("ВидСубконто", "ExtDimensionType");
-	Str.Insert("Забалансовый", "OffBalance");
-	Str.Insert("Вид", "Type");
-	Str.Insert("Владелец", "Owner");
-	Str.Insert("ВедущиеВидыРасчета", "LeadingCalculationTypes");
-	Str.Insert("ВидРасчета", "CalculationType");
-	Str.Insert("ВытесняющиеВидыРасчета", "DisplacingCalculationTypes");
-	Str.Insert("БазовыеВидыРасчета", "BaseCalculationTypes");
-	Str.Insert("ПериодДействияБазовый", "ActionPeriodIsBasic");
-	Str.Insert("Проведен", "Posted");
-	Str.Insert("Дата", "Date");
-	Str.Insert("Номер", "Number");
-	Str.Insert("ПериодРегистрации", "RegistrationPeriod");
-	Str.Insert("Сторно", "ReversingEntry");
-	Str.Insert("БазовыйПериодКонец", "EndOfBasePeriod");
-	Str.Insert("БазовыйПериодНачало", "BegOfBasePeriod");
-	Str.Insert("ПериодДействияКонец", "EndOfActionPeriod");
-	Str.Insert("ПериодДействияНачало", "BegOfActionPeriod");
-	Str.Insert("ПериодДействия", "ActionPeriod");
-	Str.Insert("ЭтотУзел", "ThisNode");
-	Str.Insert("НомерПринятого", "ReceivedNo");
-	Str.Insert("НомерОтправленного", "SentNo");
-	Str.Insert("Стартован", "Started");
-	Str.Insert("ВедущаяЗадача", "HeadTask");
-	Str.Insert("Завершен", "Completed");
-	Str.Insert("Выполнена", "Executed");
-	Str.Insert("ТочкаМаршрута", "RoutePoint");
-	Str.Insert("БизнесПроцесс", "BusinessProcess");
-	Str.Insert("Счет", "Account");
-	Str.Insert("ПериодДействияБазовый", "ActionPeriodIsBasic");
-	FoundName = Str.Get(AttributeName);
-	If Not FoundName = Undefined Then
-		AttributeName = FoundName;
-	EndIf;
 EndProcedure
 
 #EndRegion
