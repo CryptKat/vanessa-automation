@@ -904,6 +904,26 @@ Function MetadataTypeValueSingle(Val MetadataTypeValue)
 EndFunction
 
 &AtServerNoContext
+Function MetadataTypeValueEnFromRu(Val MetadataTypeValue)
+	If MetadataTypeValue = "Справочник" Then
+		ReturnValue = "Catalog";
+	ElsIf MetadataTypeValue = "Documents" Then
+		ReturnValue = "Документ";
+	ElsIf MetadataTypeValue = "ChartsOfCharacteristicTypes" Then
+		ReturnValue = "ПланВидовХарактеристик";
+	ElsIf MetadataTypeValue = "InformationRegisters" Then
+		ReturnValue = "РегистрСведений";
+	ElsIf MetadataTypeValue = "AccumulationRegisters" Then
+		ReturnValue = "РегистрНакопления";
+	ElsIf MetadataTypeValue = "Constants" Then
+		ReturnValue = "Константа";
+	Else
+		ReturnValue = MetadataTypeValue;
+	EndIf;
+	Return ReturnValue;
+EndFunction
+
+&AtServerNoContext
 Function GetObjectLinkFromObjectURL(ObjectURL)
 	Five = 5;
 	Nine = 9;
@@ -966,7 +986,9 @@ Procedure SelectDependentItemsAtServer()
 	ProcessingDependenciesLoop(ProcessingDependencies, Dependencies);
 	DependenciesNames = New Array;
 	For Each Dependence In Dependencies Do
-		DependenciesNames.Add(Dependence.FullName());
+		DependenceNameParts = StrSplit(Dependence.FullName(), ".");
+		DependenceName = MetadataTypeValueEnFromRu(DependenceNameParts[0]) + "." + DependenceNameParts[1];
+		DependenciesNames.Add(DependenceName);
 	EndDo;
 	For Each ParentItem In MetadataList.GetItems() Do
 		For Each Item In ParentItem.GetItems() Do
