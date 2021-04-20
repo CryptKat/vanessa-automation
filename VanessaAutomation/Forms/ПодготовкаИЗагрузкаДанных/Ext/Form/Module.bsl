@@ -241,7 +241,7 @@ Procedure ICheckOrCreateDocumentObjectsAtServer(ObjectName, Values)
 			FoundColumn = ObjectAttributes.Columns.Find("Проведен");	
 		EndIf;
 		If FoundColumn <> Undefined
-			And Row[Column.Name] = "True" Then
+			And Row[FoundColumn.Name] = "True" Then
 			DocumentWriteModeValue = DocumentWriteMode.Posting;
 		Else
 			DocumentWriteModeValue = DocumentWriteMode.Write;
