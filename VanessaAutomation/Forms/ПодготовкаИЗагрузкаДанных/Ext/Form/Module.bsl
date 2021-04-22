@@ -1223,11 +1223,10 @@ Procedure ProcessingDownstreamDependenciesLoopForObjects(ProcessingDependencies,
 			CurrentObjects = KeyValuePair.Value;
 			MetadataObjectFullName = CurrentObjects[0].Metadata().FullName();
 			MetadataClass = MetadataTypeValueEnFromRu(StrSplit(MetadataObjectFullName, ".")[0]);		
-			For i = -CurrentObjects.Count() + 1 To 0 Do
-				DataValue = CurrentObjects[-i];
+			For Each DataValue In CurrentObjects Do
 				If DataValue = Undefined
-				 Or Dependencies.Find(DataValue, "Item") <> Undefined
-				 Or ProcessedDependences[DataValue] <> Undefined Then
+				 Or ProcessedDependences[DataValue] <> Undefined
+				 Or Dependencies.Find(DataValue, "Item") <> Undefined Then
 					Continue;
 				EndIf;
 				Dependencies.Add().Item = DataValue;
