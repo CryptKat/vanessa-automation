@@ -637,6 +637,24 @@ Procedure SelectDependentItems(Command)
 	SelectDependentItemsAtServer();
 EndProcedure
 
+&AtClient
+Procedure AddObjectByURL(Command)
+	Notify = New NotifyDescription("AddObjectByURLContinuation", ThisObject);
+	ShowInputString(Notify, "", NStr("ru = 'Введите навигационную ссылку'"));	
+EndProcedure
+
+&AtClient
+Procedure AddObjectByURLContinuation(Result, AdditionalParameters) Export
+	If Result = Undefined Then
+		Return;
+	EndIf;	
+	ObjectRef = GetObjectLinkFromObjectURL(Result);
+	NewRow = DataRefs.Add();
+	NewRow.Item = ObjectRef;
+	NewRow.IncludeUpstreamDependencies = IncludeUpstreamDependenciesDefault;
+	NewRow.IncludeDownstreamDependencies = IncludeDownstreamDependenciesDefault;
+EndProcedure
+
 &НаКлиенте
 Procedure StepsLanguageПриИзменении(Элемент)
 	FillMetadataType();
@@ -647,6 +665,15 @@ Procedure StepsLanguageПриИзменении(Элемент)
 			КонецЕсли;	 
 		КонецЦикла;	 
 	КонецЦикла;	 
+EndProcedure
+
+&AtClient
+Procedure DataRefsOnStartEdit(Item, NewRow, Clone)	
+	If NewRow Then
+		CurrentRow = Item.CurrentData;
+		CurrentRow.IncludeUpstreamDependencies = IncludeUpstreamDependenciesDefault;
+		CurrentRow.IncludeDownstreamDependencies = IncludeDownstreamDependenciesDefault;
+	EndIf;	
 EndProcedure
 
 #EndRegion
@@ -1167,24 +1194,24 @@ Procedure FillDependencies(ObjectData, ProcessingDependencies, Dependencies, Pro
 EndProcedure
 
 &AtServer
-Function GetRefsWithDependencies(Val Refs)	
+Function GetRefsWithDependencies()
+	// Get a copy of DataRefs table, but without "Item" column's type constraints,
+	// so we can put there objects of other types, for example - RecordKey.
 	ItemsTable = New ValueTable;
-	ItemsTable.Columns.Add("Item");
-	For Each Ref In Refs Do
-		ItemsTable.Add().Item = Ref;			
-	EndDo;
-	ItemsTable.Indexes.Add("Item");
+    ItemsTable.Columns.Add("Item");
+	ItemsTable.Columns.Add("IncludeUpstreamDependencies");
+	ItemsTable.Columns.Add("IncludeDownstreamDependencies");
+    For Each TableRow In DataRefs Do
+		FillPropertyValues(ItemsTable.Add(), TableRow);
+    EndDo;
 	
 	Dependencies = ItemsTable.Copy();
-	If IncludeUpstreamDependencies Then
-		ProcessingDependencies = ItemsTable.Copy();
-		ProcessingUpstreamDependenciesLoopForObjects(ProcessingDependencies, Dependencies);
-	EndIf;
 	
-	If IncludeDownstreamDependencies Then
-		ProcessingDependencies = ItemsTable.Copy();
-		ProcessingDownstreamDependenciesLoopForObjects(ProcessingDependencies, Dependencies, MaxDownstreamDependenciesNestingLevel);
-	EndIf;
+	ProcessingDependencies = ItemsTable.Copy(New Structure("IncludeUpstreamDependencies", True));
+	ProcessingUpstreamDependenciesLoopForObjects(ProcessingDependencies, Dependencies);
+	
+	ProcessingDependencies = ItemsTable.Copy(New Structure("IncludeDownstreamDependencies", True));
+	ProcessingDownstreamDependenciesLoopForObjects(ProcessingDependencies, Dependencies, MaxDownstreamDependenciesNestingLevel);
 	
 	Return Dependencies.UnloadColumn("Item");
 EndFunction
@@ -1263,7 +1290,7 @@ Procedure FillDependenciesForObjects(ObjectData, ProcessingDependencies, Depende
 			EndIf;		
 			PredefinedCheck = New Structure;
 			PredefinedCheck.Insert("Predefined", Undefined);
-			FillPropertyValues(PredefinedCheck, DataValue);		
+			FillPropertyValues(PredefinedCheck, DataValue);
 			If PredefinedCheck.Predefined <> Undefined And PredefinedCheck.Predefined Then
 				Continue;
 			EndIf;
@@ -1467,7 +1494,7 @@ Function GenerateFeatureFileForRefsAtServer()
 	Scenarious = New Array;
 	AddComments = Not DontAddCommentsWithMetadataName;
 	
-	Objects = GetRefsWithDependencies(DataRefs.UnloadValues());
+	Objects = GetRefsWithDependencies();
 	ObjectsByTypes = GroupItemsByType(Objects);
 	
 	ObjectsByTypesTable = New ValueTable;
@@ -2083,24 +2110,5 @@ Function LocalizedStringsServer()
 	
 	Return ReturnData;
 EndFunction
-
-&AtClient
-Procedure AddObjectByURL(Command)
-	Notify = New NotifyDescription("AddObjectByURLContinuation", ThisObject);
-	ShowInputString(Notify, "", NStr("ru = 'Введите навигационную ссылку'"));
-	
-	
-EndProcedure
-
-&AtClient
-Procedure AddObjectByURLContinuation(Result, AdditionalParameters) Export
-	If Result = Undefined Then
-		Return;
-	EndIf;
-	
-	ObjectRef = GetObjectLinkFromObjectURL(Result);
-	DataRefs.Add(ObjectRef);
-	
-EndProcedure
 
 #EndRegion
