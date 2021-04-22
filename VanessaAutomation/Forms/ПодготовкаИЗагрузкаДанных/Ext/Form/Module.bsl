@@ -2085,4 +2085,23 @@ Function LocalizedStringsServer()
 	Return ReturnData;
 EndFunction
 
+&AtClient
+Procedure AddObjectByURL(Command)
+	Notify = New NotifyDescription("AddObjectByURLContinuation", ThisObject);
+	ShowInputString(Notify, "", NStr("ru = 'Введите навигационную ссылку'"));
+	
+	
+EndProcedure
+
+&AtClient
+Procedure AddObjectByURLContinuation(Result, AdditionalParameters) Export
+	If Result = Undefined Then
+		Return;
+	EndIf;
+	
+	ObjectRef = GetObjectLinkFromObjectURL(Result);
+	DataRefs.Add(ObjectRef);
+	
+EndProcedure
+
 #EndRegion

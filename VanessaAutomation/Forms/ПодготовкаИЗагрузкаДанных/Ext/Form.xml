@@ -291,6 +291,11 @@
 							<ContextMenu name="DataRefsКонтекстноеМеню" id="96"/>
 							<AutoCommandBar name="DataRefsКоманднаяПанель" id="97">
 								<ChildItems>
+									<Button name="DataRefsAddObjectByURL" id="131">
+										<Type>CommandBarButton</Type>
+										<CommandName>Form.Command.AddObjectByURL</CommandName>
+										<ExtendedTooltip name="DataRefsAddObjectByURLРасширеннаяПодсказка" id="132"/>
+									</Button>
 									<Button name="DataRefsGenerateFeatureForRefs" id="115">
 										<Type>CommandBarButton</Type>
 										<CommandName>Form.Command.GenerateFeatureForRefs</CommandName>
@@ -627,6 +632,15 @@
 				</v8:item>
 			</Title>
 			<Action>GenerateFeatureForRefs</Action>
+		</Command>
+		<Command name="AddObjectByURL" id="3">
+			<Title>
+				<v8:item>
+					<v8:lang>ru</v8:lang>
+					<v8:content>Добавить по ссылке</v8:content>
+				</v8:item>
+			</Title>
+			<Action>AddObjectByURL</Action>
 		</Command>
 	</Commands>
 </Form>
