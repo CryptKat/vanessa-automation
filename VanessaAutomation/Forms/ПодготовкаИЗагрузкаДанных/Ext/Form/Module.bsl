@@ -962,7 +962,11 @@ Function GetValueTableFromVanessaTableArray(Val TableArray)
 	For Each Row In TableArray Do
 		NewRow = ReturnValue.Add();
 		For Each ColumnData In ColumnsNames Do
-			NewRow[ColumnData.Value] = Row[ColumnData.Key];
+			CellValue = Row[ColumnData.Key];
+			CellValue = StrReplace(CellValue, "\\'", "\");
+			CellValue = StrReplace(CellValue, "\n", Chars.LF);
+			CellValue = StrReplace(CellValue, "\'", "'");
+			NewRow[ColumnData.Value] = CellValue;
 		EndDo; 
 	EndDo;
 	
@@ -1448,6 +1452,9 @@ Function GeValuetStringRepresentation(DataValue)
 			ReturnValue = Format(DataValue, "BF=False; BT=True;");
 		Else
 			ReturnValue = String(DataValue);
+			ReturnValue = StrReplace(ReturnValue, "\", "\\");
+			ReturnValue = StrReplace(ReturnValue, Chars.LF, "\n");
+			ReturnValue = StrReplace(ReturnValue, "'", "\'");
 		EndIf;
 	ElsIf isMetadataObjectAndDataValueNotEmpty(MetadataObject, DataValue) Then
 		PredefinedCheck = New Structure;
