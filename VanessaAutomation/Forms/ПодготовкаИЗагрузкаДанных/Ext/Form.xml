@@ -22,6 +22,12 @@
 	<ChildItems>
 		<RadioButtonField name="StepsLanguage" id="86">
 			<DataPath>StepsLanguage</DataPath>
+			<Title>
+				<v8:item>
+					<v8:lang>ru</v8:lang>
+					<v8:content>Язык шагов</v8:content>
+				</v8:item>
+			</Title>
 			<RadioButtonType>Tumbler</RadioButtonType>
 			<ChoiceList>
 				<xr:Item>

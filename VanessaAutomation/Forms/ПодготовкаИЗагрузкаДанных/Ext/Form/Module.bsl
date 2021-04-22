@@ -1213,6 +1213,7 @@ Function GetRefsWithDependencies()
 	ProcessingDependencies = ItemsTable.Copy(New Structure("IncludeDownstreamDependencies", True));
 	ProcessingDownstreamDependenciesLoopForObjects(ProcessingDependencies, Dependencies, MaxDownstreamDependenciesNestingLevel);
 	
+	Dependencies.GroupBy("Item");
 	Return Dependencies.UnloadColumn("Item");
 EndFunction
 
@@ -1556,7 +1557,7 @@ Function GenerateFeatureFileForRefsAtServer()
 		
 		If AddComments Then
 			LocalizedMetadataClass = ?(LangCode = "ru", MetadataTypeValueRuFromEn(MetadataClass), MetadataClass);
-			Scenario.Add(StrTemplate("// %1", LocalizedMetadataClass + "." + MetadataObjectName));
+			Scenario.Add(Chars.Tab + "// " + LocalizedMetadataClass + "." + MetadataObjectName);
 			Scenario.Add("");
 		EndIf;	
 		Scenario.Add(Chars.Tab + StrTemplate(ScenarioActionString, """" + MetadataObjectName + """", Chars.LF, MarkdownTables.ObjectDataMarkdownTable));
@@ -1849,7 +1850,9 @@ Function isMetadataObjectAndDataValueNotEmpty(MetadataObject, DataValue)
 	Return MetadataObject <> Undefined
 			And (Metadata.Catalogs.Contains(MetadataObject)
 				Or Metadata.Documents.Contains(MetadataObject)
-				Or Metadata.ChartsOfCharacteristicTypes.Contains(MetadataObject))
+				Or Metadata.ChartsOfCharacteristicTypes.Contains(MetadataObject)
+				Or Metadata.ChartsOfAccounts.Contains(MetadataObject)
+				Or Metadata.ChartsOfCalculationTypes.Contains(MetadataObject))
 			And Not DataValue.IsEmpty();
 EndFunction
 
