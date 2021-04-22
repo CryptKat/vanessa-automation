@@ -581,6 +581,11 @@ Procedure ServerCallOnOpen()
 	FillMetadata();
 EndProcedure
 
+&AtServer
+Procedure OnCreateAtServer(Cancel, StandardProcessing)	
+	MaxDownstreamDependenciesNestingLevel = 1;
+EndProcedure
+
 &AtClient
 Procedure OnOpen(Cancel)
 	If not Initialized Then
@@ -620,6 +625,13 @@ Procedure GenerateFeature(Command)
 	Items.GroupPages.CurrentPage = Items.GroupPageFeature;
 EndProcedure
 
+&AtClient
+Procedure GenerateFeatureForRefs(Command)		
+	Feature.Очистить();
+	Feature.ДобавитьСтроку(GenerateFeatureFileForRefsAtServer());
+	Items.GroupPages.CurrentPage = Items.GroupPageFeature;
+EndProcedure
+	
 &AtClient
 Procedure SelectDependentItems(Command)
 	SelectDependentItemsAtServer();
@@ -743,12 +755,23 @@ Procedure FillDataList(Val MetadataTypeValue, Val MetadataValue)
 EndProcedure
 
 &AtServerNoContext
-Function GetDatabaseObjectsValueTableWithoutTabularSection(Val MetadataObjectFullName)
+Function GetDatabaseObjectsValueTableWithoutTabularSection(Val MetadataObjectFullName, Val Refs = Undefined)
 	Query = New Query;
 	Query.Text = StrTemplate("SELECT ALLOWED *
 									|FROM
 									|	%1 AS Object"
 								, MetadataObjectFullName);
+	If Refs <> Undefined Then
+		If TypeOf(Refs) <> Type("Array") Then
+			RefArray = New Array;
+			RefArray.Add(Refs);
+		Else
+			RefArray = Refs;
+		EndIf;
+		Query.Text = Query.Text + "
+			|WHERE Object.Ref IN (&RefArray)";
+		Query.SetParameter("RefArray", RefArray);
+	EndIf;
 	QueryExecute = Query.Execute();
 	If QueryExecute.IsEmpty() Then
 		QueryUnload = New ValueTable;		
@@ -768,13 +791,24 @@ Function GetDatabaseObjectsValueTableWithoutTabularSection(Val MetadataObjectFul
 EndFunction
 
 &AtServerNoContext
-Function GetDatabaseObjectsValueTablesOfTabularSection(Val MetadataObjectFullName)
+Function GetDatabaseObjectsValueTablesOfTabularSection(Val MetadataObjectFullName, Val Refs = Undefined)
 	TabularSections = New Structure;
 	Query = New Query;
 	Query.Text = StrTemplate("SELECT ALLOWED *
 									|FROM
 									|	%1 AS Object"
 								, MetadataObjectFullName);
+	If Refs <> Undefined Then
+		If TypeOf(Refs) <> Type("Array") Then
+			RefArray = New Array;
+			RefArray.Add(Refs);
+		Else
+			RefArray = Refs;
+		EndIf;
+		Query.Text = Query.Text + "
+			|WHERE Object.Ref IN (&RefArray)";
+		Query.SetParameter("RefArray", RefArray);
+	EndIf;
 	QueryExecute = Query.Execute();
 	If QueryExecute.IsEmpty() Then
 		QueryUnload = New ValueTable;		
@@ -799,6 +833,73 @@ Function GetDatabaseObjectsValueTablesOfTabularSection(Val MetadataObjectFullNam
 	EndDo;
 	
 	Return TabularSections;	
+EndFunction
+
+&AtServerNoContext
+Function GetDatabaseRegistersValueTable(Val MetadataObjectFullName, Val RecordKeys = Undefined)
+	Query = New Query;
+	If RecordKeys <> Undefined Then
+		If TypeOf(RecordKeys) <> Type("Array") Then
+			RecordKeysArray = New Array;
+			RecordKeysArray.Add(RecordKeys);
+		Else
+			RecordKeysArray = RecordKeys;
+		EndIf;
+		
+		RecordKeyFields = New Array;
+		RecordKeysTable = New ValueTable;
+		RegisterMetadata = Metadata.FindByFullName(MetadataObjectFullName);
+		
+		For Each Dimension In RegisterMetadata.Dimensions Do
+			RecordKeysTable.Columns.Add(Dimension.Name, Dimension.Type);
+			RecordKeyFields.Add(Dimension.Name);
+		EndDo;	
+		If RegisterMetadata.InformationRegisterPeriodicity <> Metadata.ObjectProperties.InformationRegisterPeriodicity.Nonperiodical Then
+			RecordKeysTable.Columns.Add("Period", New TypeDescription("Date"));
+			RecordKeyFields.Add("Period");
+		EndIf;
+		If RegisterMetadata.WriteMode = Metadata.ObjectProperties.RegisterWriteMode.RecorderSubordinate Then
+			RecordKeysTable.Columns.Add("Recorder", New TypeDescription(Documents.AllRefsType().Types()));
+			RecordKeyFields.Add("Recorder");
+		EndIf;
+		
+		For Each RecordKey In RecordKeysArray Do
+			FillPropertyValues(RecordKeysTable.Add(), RecordKey);			
+		EndDo;
+		Query.Text = StrTemplate("SELECT ALLOWED *
+			|INTO RecordKeysTable 
+			|FROM 
+			|	&RecordKeysTable AS RecordKeysTable
+			|;
+			|SELECT ALLOWED *
+			|FROM
+			|	%1 AS Object
+			| WHERE (%2) IN (SELECT * FROM RecordKeysTable)"
+			, MetadataObjectFullName, StrConcat(RecordKeyFields, ", "));
+		Query.SetParameter("RecordKeysTable", RecordKeysTable);
+	Else
+		Query.Text = StrTemplate("SELECT ALLOWED *
+								|FROM
+								|	%1 AS Object"
+							, MetadataObjectFullName);
+
+	EndIf;
+	QueryExecute = Query.Execute();
+	If QueryExecute.IsEmpty() Then
+		QueryUnload = New ValueTable;		
+	Else
+		QueryUnload = QueryExecute.Unload();
+	EndIf;
+	ColumnsNames = New Array;
+	For Each Column In QueryUnload.Columns Do
+		If Column.ValueType = New TypeDescription("ValueTable") Then
+			ColumnsNames.Add(Column.Name);
+		EndIf;
+	EndDo;
+	For Each ColumnName In ColumnsNames Do
+		QueryUnload.Columns.Delete(ColumnName);
+	EndDo;
+	Return QueryUnload;	
 EndFunction
 
 &AtServerNoContext
@@ -907,15 +1008,35 @@ EndFunction
 Function MetadataTypeValueEnFromRu(Val MetadataTypeValue)
 	If MetadataTypeValue = "Справочник" Then
 		ReturnValue = "Catalog";
-	ElsIf MetadataTypeValue = "Documents" Then
+	ElsIf MetadataTypeValue = "Документ" Then
+		ReturnValue = "Document";
+	ElsIf MetadataTypeValue = "ПланВидовХарактеристик" Then
+		ReturnValue = "ChartOfCharacteristicTypes";
+	ElsIf MetadataTypeValue = "РегистрСведений" Then
+		ReturnValue = "InformationRegister";
+	ElsIf MetadataTypeValue = "РегистрНакопления" Then
+		ReturnValue = "AccumulationRegister";
+	ElsIf MetadataTypeValue = "Константа" Then
+		ReturnValue = "Constant";
+	Else
+		ReturnValue = MetadataTypeValue;
+	EndIf;
+	Return ReturnValue;
+EndFunction
+
+&AtServerNoContext
+Function MetadataTypeValueRuFromEn(Val MetadataTypeValue)
+	If MetadataTypeValue = "Catalog" Then
+		ReturnValue = "Справочник";
+	ElsIf MetadataTypeValue = "Document" Then
 		ReturnValue = "Документ";
-	ElsIf MetadataTypeValue = "ChartsOfCharacteristicTypes" Then
+	ElsIf MetadataTypeValue = "ChartOfCharacteristicTypes" Then
 		ReturnValue = "ПланВидовХарактеристик";
-	ElsIf MetadataTypeValue = "InformationRegisters" Then
+	ElsIf MetadataTypeValue = "InformationRegister" Then
 		ReturnValue = "РегистрСведений";
-	ElsIf MetadataTypeValue = "AccumulationRegisters" Then
+	ElsIf MetadataTypeValue = "AccumulationRegister" Then
 		ReturnValue = "РегистрНакопления";
-	ElsIf MetadataTypeValue = "Constants" Then
+	ElsIf MetadataTypeValue = "Constant" Then
 		ReturnValue = "Константа";
 	Else
 		ReturnValue = MetadataTypeValue;
@@ -1045,6 +1166,114 @@ Procedure FillDependencies(ObjectData, ProcessingDependencies, Dependencies, Pro
 	EndDo;
 EndProcedure
 
+&AtServer
+Function GetRefsWithDependencies(Val Refs)	
+	ItemsTable = New ValueTable;
+	ItemsTable.Columns.Add("Item");
+	For Each Ref In Refs Do
+		ItemsTable.Add().Item = Ref;			
+	EndDo;
+	ItemsTable.Indexes.Add("Item");
+	
+	Dependencies = ItemsTable.Copy();
+	If IncludeUpstreamDependencies Then
+		ProcessingDependencies = ItemsTable.Copy();
+		ProcessingUpstreamDependenciesLoopForObjects(ProcessingDependencies, Dependencies);
+	EndIf;
+	
+	If IncludeDownstreamDependencies Then
+		ProcessingDependencies = ItemsTable.Copy();
+		ProcessingDownstreamDependenciesLoopForObjects(ProcessingDependencies, Dependencies, MaxDownstreamDependenciesNestingLevel);
+	EndIf;
+	
+	Return Dependencies.UnloadColumn("Item");
+EndFunction
+
+&AtServerNoContext
+Procedure ProcessingUpstreamDependenciesLoopForObjects(ProcessingDependencies, Dependencies)
+	LoopProtect = 10000;
+	While ProcessingDependencies.Count() And LoopProtect Do
+		ItemsByTypes = GroupItemsByType(ProcessingDependencies.UnloadColumn("Item"));
+		For Each KeyValuePair In ItemsByTypes Do 
+			CurrentDependences = KeyValuePair.Value;
+			MetadataObjectFullName = CurrentDependences[0].Metadata().FullName();
+			ObjectData = GetDatabaseObjectsValueTableWithoutTabularSection(MetadataObjectFullName, CurrentDependences);
+			FillDependenciesForObjects(ObjectData, ProcessingDependencies, Dependencies);
+			TabularSections = GetDatabaseObjectsValueTablesOfTabularSection(MetadataObjectFullName, CurrentDependences);
+			For Each TabularSection In TabularSections Do
+				ObjectData = TabularSection.Value;
+				FillDependenciesForObjects(ObjectData, ProcessingDependencies, Dependencies);
+			EndDo;
+			For Each Item In CurrentDependences Do
+				ProcessingDependencies.Delete(ProcessingDependencies.Find(Item, "Item"));	
+			EndDo;
+		EndDo;
+		LoopProtect = LoopProtect - 1;
+	EndDo;
+EndProcedure
+
+&AtServerNoContext
+Procedure ProcessingDownstreamDependenciesLoopForObjects(ProcessingDependencies, Dependencies, Val LoopsRemaining = 1)
+	ProcessedDependences = New Map;
+	While ProcessingDependencies.Count() And LoopsRemaining Do
+		CurrentProcessingDependencies = ProcessingDependencies.UnloadColumn("Item");
+		FoundObjects = FindByRef(CurrentProcessingDependencies).UnloadColumn(1);
+		ObjectsByType = GroupItemsByType(FoundObjects);
+		For Each KeyValuePair In ObjectsByType Do 
+			CurrentObjects = KeyValuePair.Value;
+			MetadataObjectFullName = CurrentObjects[0].Metadata().FullName();
+			MetadataClass = MetadataTypeValueEnFromRu(StrSplit(MetadataObjectFullName, ".")[0]);		
+			For i = -CurrentObjects.Count() + 1 To 0 Do
+				DataValue = CurrentObjects[-i];
+				If DataValue = Undefined
+				 Or Dependencies.Find(DataValue, "Item") <> Undefined
+				 Or ProcessedDependences[DataValue] <> Undefined Then
+					Continue;
+				EndIf;
+				Dependencies.Add().Item = DataValue;
+				If Not StrEndsWith(MetadataClass, "Register") Then
+					ProcessingDependencies.Add().Item = DataValue;
+				EndIf;		
+			EndDo;	
+		EndDo;	
+		For Each Item In CurrentProcessingDependencies Do
+			ProcessingDependencies.Delete(ProcessingDependencies.Find(Item, "Item"));
+			ProcessedDependences.Insert(Item, Item);
+		EndDo;
+		LoopsRemaining = LoopsRemaining - 1;
+	EndDo;
+EndProcedure
+
+&AtServerNoContext
+Procedure FillDependenciesForObjects(ObjectData, ProcessingDependencies, Dependencies)
+	For Each Row In ObjectData Do
+		For Each Column In ObjectData.Columns Do
+			If isUnsupportedAttribute(Column.Name) Then
+				Continue;
+			EndIf;
+			DataValue = Row[Column.Name];
+			XMLType = XMLTypeOf(DataValue);
+			If XMLType = Undefined Then
+				Continue;
+			EndIf;
+			TypeName = XMLTypeOf(DataValue).TypeName;
+			If Not (StrStartsWith(TypeName, "CatalogRef") Or StrStartsWith(TypeName, "DocumentRef") Or StrStartsWith(TypeName, "ChartOfCharacteristicTypesRef"))
+			 Or DataValue.IsEmpty()
+			 Or Dependencies.Find(DataValue, "Item") <> Undefined Then
+				Continue;
+			EndIf;		
+			PredefinedCheck = New Structure;
+			PredefinedCheck.Insert("Predefined", Undefined);
+			FillPropertyValues(PredefinedCheck, DataValue);		
+			If PredefinedCheck.Predefined <> Undefined And PredefinedCheck.Predefined Then
+				Continue;
+			EndIf;
+			ProcessingDependencies.Add().Item = DataValue;
+			Dependencies.Add().Item = DataValue;
+		EndDo;
+	EndDo;
+EndProcedure
+
 &AtServerNoContext
 Function EnumNameByRef(RefData) Export
 	RefNameType = RefData.Metadata().Name;
@@ -1151,6 +1380,21 @@ Procedure FillStepsLanguage()
 	EndIf;
 EndProcedure
 
+&AtServerNoContext
+Function GroupItemsByType(ItemArray)
+	ItemsByType = New Map();
+	For Each ArrayItem In ItemArray Do
+		ItemType = TypeOf(ArrayItem);
+		ItemsOfType = ItemsByType[ItemType];
+		If ItemsOfType = Undefined Then
+			ItemsOfType = New Array;
+			ItemsByType[ItemType] = ItemsOfType;
+		EndIf;
+		ItemsOfType.Add(ArrayItem);
+	EndDo;
+	Return ItemsByType;
+EndFunction
+
 #Region GenerateFeature
 
 #Region FeatureFile
@@ -1217,13 +1461,101 @@ Function GeneratedFeatureFile()
 	Return StrConcat(ReturnValue, Chars.LF);
 EndFunction
 
+&AtServer
+Function GenerateFeatureFileForRefsAtServer()	
+	LangCode = ThisObject.StepsLanguage;
+	ReturnValue = New Array;	
+	Scenarious = New Array;
+	AddComments = Not DontAddCommentsWithMetadataName;
+	
+	Objects = GetRefsWithDependencies(DataRefs.UnloadValues());
+	ObjectsByTypes = GroupItemsByType(Objects);
+	
+	ObjectsByTypesTable = New ValueTable;
+	ObjectsByTypesTable.Columns.Add("TypePriority");
+	ObjectsByTypesTable.Columns.Add("MetadataClass");
+	ObjectsByTypesTable.Columns.Add("MetadataObjectName");
+	ObjectsByTypesTable.Columns.Add("Objects");
+	For Each KeyValuePair In ObjectsByTypes Do
+		ObjectsOfType = KeyValuePair.Value;
+		
+		MetadataFullName = ObjectsOfType[0].Metadata().FullName();
+		MetadataFullNameParts = StrSplit(MetadataFullName, ".");
+		MetadataClass = MetadataTypeValueEnFromRu(MetadataFullNameParts[0]);
+		MetadataObjectName = MetadataFullNameParts[1];
+		
+		If MetadataClass = "Catalog" Then
+			TypePriority = 1;
+		ElsIf MetadataClass = "ChartOfCharacteristicTypes" Then
+			TypePriority = 2;
+		ElsIf MetadataClass = "InformationRegister" Then
+			TypePriority = 3;
+		ElsIf MetadataClass = "AccumulationRegister" Then
+			TypePriority = 4;
+		ElsIf MetadataClass = "Document" Then
+			TypePriority = 5;
+		Else
+			Raise NStr("ru = 'Неподдерживаемый класс метаданных!'");
+		EndIf;
+		
+		NewRow = ObjectsByTypesTable.Add();
+		NewRow.TypePriority = TypePriority;
+		NewRow.MetadataClass = MetadataClass;
+		NewRow.MetadataObjectName = MetadataObjectName;
+		NewRow.Objects = ObjectsOfType;
+	EndDo;
+	ObjectsByTypesTable.Sort("TypePriority, MetadataObjectName");
+	
+	Scenario = New Array;	
+	Scenario.Add(LocalizedStringsServer()["s11a_" + LangCode]);
+	Scenario.Add("");
+	
+	For Each TableRow In ObjectsByTypesTable Do
+		MetadataClass = TableRow.MetadataClass;
+		MetadataObjectName = TableRow.MetadataObjectName;
+	
+		MarkdownTables = GetMarkdownTables(MetadataClass, MetadataObjectName, TableRow.Objects);
+
+		If MetadataClass = "Catalog" Then
+			ScenarioActionString = ScenarioCatalogActionString(LangCode);
+		ElsIf MetadataClass = "Document" Then
+			ScenarioActionString = ScenarioDocumentActionString(LangCode);
+		ElsIf MetadataClass = "ChartOfCharacteristicTypes" Then
+			ScenarioActionString = ScenarioChartOfCharacteristicTypesActionString(LangCode);
+		ElsIf MetadataClass = "InformationRegister" Then
+			ScenarioActionString = ScenarioInformationRegisterActionString(LangCode);
+		ElsIf MetadataClass = "AccumulationRegister" Then
+			ScenarioActionString = ScenarioAccumulationRegisterActionString(LangCode);
+		EndIf;
+		
+		If AddComments Then
+			LocalizedMetadataClass = ?(LangCode = "ru", MetadataTypeValueRuFromEn(MetadataClass), MetadataClass);
+			Scenario.Add(StrTemplate("// %1", LocalizedMetadataClass + "." + MetadataObjectName));
+			Scenario.Add("");
+		EndIf;	
+		Scenario.Add(Chars.Tab + StrTemplate(ScenarioActionString, """" + MetadataObjectName + """", Chars.LF, MarkdownTables.ObjectDataMarkdownTable));
+		For Each DataValue In MarkdownTables.TabularSectionsDataMarkdownTables Do
+			Scenario.Add("");
+			Scenario.Add(Chars.Tab + StrTemplate(ScenarioTabularSectionActionString(LangCode), """" + DataValue.Key + """", Chars.LF, DataValue.Value));
+		EndDo;
+		Scenario.Add("");
+	EndDo;
+	
+	Scenario = StrConcat(Scenario, Chars.LF);
+		
+	ReturnValue.Add(FeatureTitle(LangCode, true));
+	ReturnValue.Add(Scenario);
+	
+	Return StrConcat(ReturnValue, Chars.LF);	
+EndFunction
+
 &AtServerNoContext
-Function FeatureTitle(LangCode)
+Function FeatureTitle(LangCode, ObjectsMode = false)
 	TitleString = New Array;
 	TitleString.Add(LocalizedStringsServer()["s9a_" + LangCode]);
 	TitleString.Add(LocalizedStringsServer()["s9b_" + LangCode]);
 	TitleString.Add("");
-	TitleString.Add(LocalizedStringsServer()["s9c_" + LangCode]);
+	TitleString.Add(LocalizedStringsServer()[?(ObjectsMode, "s9f_", "s9c_") + LangCode]);
 	TitleString.Add("");
 	TitleString.Add(LocalizedStringsServer()["s9d_" + LangCode]);
 	TitleString.Add(Chars.Tab + LocalizedStringsServer()["s9e_" + LangCode]);
@@ -1378,17 +1710,24 @@ EndFunction
 #Region MarkdownTable
 
 &AtServerNoContext
-Function GetMarkdownTables(Val MetadataObjectPropertyName, Val MetadataObjectName)
+Function GetMarkdownTables(Val MetadataObjectPropertyName, Val MetadataObjectName, Val Objects = Undefined)
 	ReturnValue = New Structure();
-	ObjectData = GetDatabaseObjectsValueTableWithoutTabularSection(MetadataObjectPropertyName + "." + MetadataObjectName);
+	IsRegister = StrEndsWith(MetadataObjectPropertyName, "Register");
+	If IsRegister Then
+		ObjectData = GetDatabaseRegistersValueTable(MetadataObjectPropertyName + "." + MetadataObjectName, Objects);				
+	Else
+		ObjectData = GetDatabaseObjectsValueTableWithoutTabularSection(MetadataObjectPropertyName + "." + MetadataObjectName, Objects);
+	EndIf;
 	ObjectDataMarkdownTable = GetMarkdownTable(MetadataObjectPropertyName, MetadataObjectName, ObjectData);
 	ReturnValue.Insert("ObjectDataMarkdownTable", ObjectDataMarkdownTable);
 	TabularSectionsDataMarkdownTables = New Structure;
-	TabularSections = GetDatabaseObjectsValueTablesOfTabularSection(MetadataObjectPropertyName + "." + MetadataObjectName);
-	For Each ItemData In TabularSections Do
-		TabularSectionMarkdownTable = GetMarkdownTable(MetadataObjectPropertyName, MetadataObjectName, ItemData.Value);
-		TabularSectionsDataMarkdownTables.Insert(ItemData.Key, TabularSectionMarkdownTable);
-	EndDo;
+	If Not IsRegister Then
+		TabularSections = GetDatabaseObjectsValueTablesOfTabularSection(MetadataObjectPropertyName + "." + MetadataObjectName, Objects);
+		For Each ItemData In TabularSections Do
+			TabularSectionMarkdownTable = GetMarkdownTable(MetadataObjectPropertyName, MetadataObjectName, ItemData.Value);
+			TabularSectionsDataMarkdownTables.Insert(ItemData.Key, TabularSectionMarkdownTable);
+		EndDo;
+	EndIf;
 	ReturnValue.Insert("TabularSectionsDataMarkdownTables", TabularSectionsDataMarkdownTables);
 	Return ReturnValue;
 EndFunction
@@ -1722,6 +2061,8 @@ Function LocalizedStringsServer()
 	ReturnData.Insert("s9d_ru", "Контекст:");
 	ReturnData.Insert("s9e_en", "Given I launch TestClient opening script or connect the existing one");
 	ReturnData.Insert("s9e_ru", "Дано Я запускаю сценарий открытия TestClient или подключаю уже существующий");
+	ReturnData.Insert("s9f_en", "Feature: <feature description>");
+	ReturnData.Insert("s9f_ru", "Функционал: <описание фичи>");
 	
 	ReturnData.Insert("s10a_en", "IRefillConstantByValue(ConstantName, ConstantValue)");
 	ReturnData.Insert("s10a_ru", "ЯПерезаполняюКонстантуЗначением(ИмяКонстанты, ЗначениеКонстанты)");
@@ -1737,6 +2078,9 @@ Function LocalizedStringsServer()
 	ReturnData.Insert("s10f_ru", "Перезаполняет константу");
 	ReturnData.Insert("s10g_en", "Value");
 	ReturnData.Insert("s10g_ru", "Значение");
+	
+	ReturnData.Insert("s11a_en", "Scenario: Data preparation");
+	ReturnData.Insert("s11a_ru", "Сценарий: Подготовка данных");
 	
 	Return ReturnData;
 EndFunction
