@@ -583,7 +583,7 @@ EndProcedure
 
 &AtServer
 Procedure OnCreateAtServer(Cancel, StandardProcessing)	
-	MaxDownstreamDependenciesNestingLevel = 1;
+	MaxDownstreamDependenciesHierarchyLevel = 1;
 EndProcedure
 
 &AtClient
@@ -619,6 +619,20 @@ Procedure MetadataListSelection(Item, RowSelected, Field, StandardProcessing)
 EndProcedure
 
 &AtClient
+Procedure IncludeUpstreamDependenciesDefaultOnChange(Item)
+	For Each Row In DataRefs Do
+		Row.IncludeUpstreamDependencies = IncludeUpstreamDependenciesDefault;
+	EndDo;
+EndProcedure
+
+&AtClient
+Procedure IncludeDownstreamDependenciesDefaultOnChange(Item)
+	For Each Row In DataRefs Do
+		Row.IncludeDownstreamDependencies = IncludeDownstreamDependenciesDefault;
+	EndDo;
+EndProcedure
+
+&AtClient
 Procedure GenerateFeature(Command)
 	Feature.Очистить();
 	Feature.ДобавитьСтроку(GeneratedFeatureFile());
@@ -640,19 +654,22 @@ EndProcedure
 &AtClient
 Procedure AddObjectByURL(Command)
 	Notify = New NotifyDescription("AddObjectByURLContinuation", ThisObject);
-	ShowInputString(Notify, "", NStr("ru = 'Введите навигационную ссылку'"));	
+	ShowInputString(Notify, "", NStr("ru = 'Введите навигационные ссылки'"), , True);	
 EndProcedure
 
 &AtClient
 Procedure AddObjectByURLContinuation(Result, AdditionalParameters) Export
 	If Result = Undefined Then
 		Return;
-	EndIf;	
-	ObjectRef = GetObjectLinkFromObjectURL(Result);
-	NewRow = DataRefs.Add();
-	NewRow.Item = ObjectRef;
-	NewRow.IncludeUpstreamDependencies = IncludeUpstreamDependenciesDefault;
-	NewRow.IncludeDownstreamDependencies = IncludeDownstreamDependenciesDefault;
+	EndIf;
+	ObjectURLs = StrSplit(Result, Chars.LF + ",", False);
+	ObjectRefs = GetObjectLinksFromObjectURLs(ObjectURLs);
+	For Each ObjectRef In ObjectRefs Do
+		NewRow = DataRefs.Add();
+		NewRow.Item = ObjectRef;
+		NewRow.IncludeUpstreamDependencies = IncludeUpstreamDependenciesDefault;
+		NewRow.IncludeDownstreamDependencies = IncludeDownstreamDependenciesDefault;
+	EndDo;
 EndProcedure
 
 &НаКлиенте
@@ -1095,6 +1112,15 @@ Function GetObjectLinkFromObjectURL(ObjectURL)
 EndFunction
 
 &AtServerNoContext
+Function GetObjectLinksFromObjectURLs(ObjectURLs)
+	ObjectLinks = New Array;	
+	For Each ObjectURL In ObjectURLs Do
+		ObjectLinks.Add(GetObjectLinkFromObjectURL(ObjectURL));	
+	EndDo;
+	Return ObjectLinks;
+EndFunction
+
+&AtServerNoContext
 Function GetValueTableFromVanessaTableArray(Val TableArray)
 	Two = 2;
 	ReturnValue = New ValueTable();
@@ -1211,7 +1237,7 @@ Function GetRefsWithDependencies()
 	ProcessingUpstreamDependenciesLoopForObjects(ProcessingDependencies, Dependencies);
 	
 	ProcessingDependencies = ItemsTable.Copy(New Structure("IncludeDownstreamDependencies", True));
-	ProcessingDownstreamDependenciesLoopForObjects(ProcessingDependencies, Dependencies, MaxDownstreamDependenciesNestingLevel);
+	ProcessingDownstreamDependenciesLoopForObjects(ProcessingDependencies, Dependencies, MaxDownstreamDependenciesHierarchyLevel);
 	
 	Dependencies.GroupBy("Item");
 	Return Dependencies.UnloadColumn("Item");
@@ -1570,14 +1596,14 @@ Function GenerateFeatureFileForRefsAtServer()
 	
 	Scenario = StrConcat(Scenario, Chars.LF);
 		
-	ReturnValue.Add(FeatureTitle(LangCode, true));
+	ReturnValue.Add(FeatureTitle(LangCode, True));
 	ReturnValue.Add(Scenario);
 	
 	Return StrConcat(ReturnValue, Chars.LF);	
 EndFunction
 
 &AtServerNoContext
-Function FeatureTitle(LangCode, ObjectsMode = false)
+Function FeatureTitle(LangCode, ObjectsMode = False)
 	TitleString = New Array;
 	TitleString.Add(LocalizedStringsServer()["s9a_" + LangCode]);
 	TitleString.Add(LocalizedStringsServer()["s9b_" + LangCode]);

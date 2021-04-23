@@ -234,12 +234,15 @@
 					</Title>
 					<ExtendedTooltip name="GroupPageFilterByRefsРасширеннаяПодсказка" id="94"/>
 					<ChildItems>
-						<CheckBoxField name="IncludeUpstreamDependencies" id="117">
+						<CheckBoxField name="IncludeUpstreamDependenciesDefault" id="117">
 							<DataPath>IncludeUpstreamDependenciesDefault</DataPath>
 							<TitleLocation>Right</TitleLocation>
 							<CheckBoxType>Auto</CheckBoxType>
-							<ContextMenu name="IncludeUpstreamDependenciesКонтекстноеМеню" id="118"/>
-							<ExtendedTooltip name="IncludeUpstreamDependenciesРасширеннаяПодсказка" id="119"/>
+							<ContextMenu name="IncludeUpstreamDependenciesDefaultКонтекстноеМеню" id="118"/>
+							<ExtendedTooltip name="IncludeUpstreamDependenciesDefaultРасширеннаяПодсказка" id="119"/>
+							<Events>
+								<Event name="OnChange">IncludeUpstreamDependenciesDefaultOnChange</Event>
+							</Events>
 						</CheckBoxField>
 						<UsualGroup name="GroupIncludeDependencies" id="123">
 							<Title>
@@ -259,23 +262,26 @@
 							<ShowTitle>false</ShowTitle>
 							<ExtendedTooltip name="GroupIncludeDependenciesРасширеннаяПодсказка" id="124"/>
 							<ChildItems>
-								<CheckBoxField name="IncludeDownstreamDependencies" id="120">
+								<CheckBoxField name="IncludeDownstreamDependenciesDefault" id="120">
 									<DataPath>IncludeDownstreamDependenciesDefault</DataPath>
 									<TitleLocation>Right</TitleLocation>
 									<CheckBoxType>Auto</CheckBoxType>
-									<ContextMenu name="IncludeDownstreamDependenciesКонтекстноеМеню" id="121"/>
-									<ExtendedTooltip name="IncludeDownstreamDependenciesРасширеннаяПодсказка" id="122"/>
+									<ContextMenu name="IncludeDownstreamDependenciesDefaultКонтекстноеМеню" id="121"/>
+									<ExtendedTooltip name="IncludeDownstreamDependenciesDefaultРасширеннаяПодсказка" id="122"/>
+									<Events>
+										<Event name="OnChange">IncludeDownstreamDependenciesDefaultOnChange</Event>
+									</Events>
 								</CheckBoxField>
-								<InputField name="MaxDownstreamDependenciesNestingLevel" id="128">
-									<DataPath>MaxDownstreamDependenciesNestingLevel</DataPath>
+								<InputField name="MaxDownstreamDependenciesHierarchyLevel" id="128">
+									<DataPath>MaxDownstreamDependenciesHierarchyLevel</DataPath>
 									<ToolTip>
 										<v8:item>
 											<v8:lang>ru</v8:lang>
 											<v8:content>Рекомендуется значение не больше 1</v8:content>
 										</v8:item>
 									</ToolTip>
-									<ContextMenu name="MaxDownstreamDependenciesNestingLevelКонтекстноеМеню" id="129"/>
-									<ExtendedTooltip name="MaxDownstreamDependenciesNestingLevelРасширеннаяПодсказка" id="130"/>
+									<ContextMenu name="MaxDownstreamDependenciesHierarchyLevelКонтекстноеМеню" id="129"/>
+									<ExtendedTooltip name="MaxDownstreamDependenciesHierarchyLevelРасширеннаяПодсказка" id="130"/>
 								</InputField>
 							</ChildItems>
 						</UsualGroup>
@@ -545,7 +551,7 @@
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
-					<v8:content>Включать восходящие зависимости</v8:content>
+					<v8:content>Включать восходящие зависимости (ссылки в объекте)</v8:content>
 				</v8:item>
 			</Title>
 			<Type>
@@ -559,7 +565,7 @@
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
-					<v8:content>Включать нисходящие зависимости</v8:content>
+					<v8:content>Включать нисходящие зависимости (ссылки на объект)</v8:content>
 				</v8:item>
 			</Title>
 			<Type>
@@ -583,11 +589,11 @@
 				<Field>DontAddCommentsWithMetadataName</Field>
 			</Save>
 		</Attribute>
-		<Attribute name="MaxDownstreamDependenciesNestingLevel" id="11">
+		<Attribute name="MaxDownstreamDependenciesHierarchyLevel" id="11">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
-					<v8:content>Макс. уровень вложенности</v8:content>
+					<v8:content>Макс. уровень иерархии</v8:content>
 				</v8:item>
 			</Title>
 			<Type>
@@ -599,7 +605,7 @@
 				</v8:NumberQualifiers>
 			</Type>
 			<Save>
-				<Field>MaxDownstreamDependenciesNestingLevel</Field>
+				<Field>MaxDownstreamDependenciesHierarchyLevel</Field>
 			</Save>
 		</Attribute>
 		<Attribute name="DataRefs" id="12">
