@@ -175,6 +175,9 @@ Procedure ICheckOrCreateCatalogObjectsAtServer(ObjectName, Values)
 			EndIf;
 			FillTipicalObjectAttributesByValues(Obj, Row, Column);
 		EndDo;
+		If Not ValueIsFilled(Obj.Code) Then
+			Obj.SetNewCode();
+		EndIf;
 		Obj.DataExchange.Load = True;
 		Obj.Write();
 	EndDo;
@@ -245,6 +248,9 @@ Procedure ICheckOrCreateDocumentObjectsAtServer(ObjectName, Values)
 			DocumentWriteModeValue = DocumentWriteMode.Posting;
 		Else
 			DocumentWriteModeValue = DocumentWriteMode.Write;
+		EndIf;
+		If Not ValueIsFilled(Obj.Number) Then
+			Obj.SetNewNumber();
 		EndIf;
 		Obj.DataExchange.Load = True;
 		If DocumentWriteModeValue = DocumentWriteMode.Posting Then
@@ -557,7 +563,7 @@ Procedure ICheckOrCreateAccumulationRegisterRecordsAtServer(RegisterName, Values
 						Continue;
 					EndIf;
 					If Column.Name = RecorderColumnName Then
-						Row[Column.Name] = RecorderRef;
+						Obj[Column.Name] = RecorderRef;
 						Continue;
 					EndIf;
 					If Column.Name = "RecordType" Or Column.Name = "ВидДвижения" Then
@@ -1354,7 +1360,7 @@ Procedure FillDependenciesForObjects(ObjectData, ProcessingDependencies, Depende
 			If XMLType = Undefined Then
 				Continue;
 			EndIf;
-			TypeName = XMLTypeOf(DataValue).TypeName;
+			TypeName = XMLType.TypeName;
 			If Not (StrStartsWith(TypeName, "CatalogRef") Or StrStartsWith(TypeName, "DocumentRef") Or StrStartsWith(TypeName, "ChartOfCharacteristicTypesRef"))
 			 Or DataValue.IsEmpty()
 			 Or Dependencies.Find(DataValue, "Item") <> Undefined Then
