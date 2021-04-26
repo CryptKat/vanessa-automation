@@ -464,13 +464,8 @@ Procedure ICheckOrCreateInformationRegisterRecordsAtServer(RegisterName, Values,
 			FillPropertyValues(DimensionsFilter, DimensionsSet);
 			FoundRows = ObjectValues.FindRows(DimensionsFilter);
 			For Each MasterDimension In MasterDimensions Do
-				If MasterDimension = "Period" Or MasterDimension = "Период" Then
-					// Autoconversion from string to date should work.
-					DimensionValue = DimensionsSet[MasterDimension];	
-				Else
-					DimensionValue = GetObjectLinkFromObjectURL(DimensionsSet[MasterDimension]);	
-				EndIf;
-				
+				ValueType = RegisterSet.Filter[MasterDimension].Value;
+				DimensionValue = ParseStringValue(DimensionsSet[MasterDimension], RegisterSet.Filter[MasterDimension].ValueType);					
 				RegisterSet.Filter[MasterDimension].Set(DimensionValue);	
 			EndDo;
 			For Each Row In FoundRows Do
@@ -1163,6 +1158,14 @@ Function GetObjectLinksFromObjectURLs(ObjectURLs)
 EndFunction
 
 &AtServerNoContext
+Function GetObjectLinkBySearchString(Manager, SearchString)
+	
+	ValueList = Manager.GetChoiceData(New Structure("SearchString", SearchString));
+	Return ?(ValueIsFilled(ValueList), ValueList[0].Value, Undefined);
+	
+EndFunction
+
+&AtServerNoContext
 Function GetValueTableFromVanessaTableArray(Val TableArray)
 	Two = 2;
 	ReturnValue = New ValueTable();
@@ -1378,37 +1381,49 @@ EndFunction
 
 &AtServerNoContext
 Procedure FillTipicalObjectAttributesByValues(Obj, Row, Column)
-	If Column.ValueType.ContainsType(Type("Boolean"))
-		And (Row[Column.Name] = "True"
-			Or Row[Column.Name] = "False") Then
-		Obj[Column.Name] = ?(Row[Column.Name] = "True", True, False);
-		Return;
-	EndIf;
-	If Left(Row[Column.Name], 10) = "e1cib/data" Then
-		Obj[Column.Name] = GetObjectLinkFromObjectURL(Row[Column.Name]);
-		Return;
-	EndIf;
-	If Left(Row[Column.Name], 4) = "Enum" And StrOccurrenceCount(Row[Column.Name], ".") = 2 Then
-		Obj[Column.Name] = PredefinedValue(Row[Column.Name]);
-		Return;
-	EndIf;
-	If StrLen(Row[Column.Name]) = 36
-		And StrOccurrenceCount(Row[Column.Name], "-") = 4 Then
-			Obj[Column.Name] = New UUID(Row[Column.Name]);
-		Return;
-	EndIf;
-	If StrLen(Row[Column.Name]) = 19
-		And StrOccurrenceCount(Row[Column.Name], ".") = 2
-		And StrOccurrenceCount(Row[Column.Name], ":") = 2 Then
-		DateString = Mid(Row[Column.Name], 7, 4)
-					+ Mid(Row[Column.Name], 4, 2)
-					+ Mid(Row[Column.Name], 1, 2)
-					+ StrReplace(Mid(Row[Column.Name], 12, 8), ":", "");
-		Obj[Column.Name] = Date(DateString);
-		Return;
-	EndIf;
-	Obj[Column.Name] = Row[Column.Name];
+	Obj[Column.Name] = ParseStringValue(Row[Column.Name], Column.ValueType);
 EndProcedure
+
+&AtServerNoContext
+Function ParseStringValue(Val StringValue, Val ValueType)
+	If ValueType.ContainsType(Type("Boolean"))
+		And (StringValue = "True"
+			Or StringValue = "False") Then
+		Return ?(StringValue = "True", True, False);
+	EndIf;
+	If Left(StringValue, 10) = "e1cib/data" Then
+		Return GetObjectLinkFromObjectURL(StringValue);
+	EndIf;
+	If Left(StringValue, 4) = "Enum" And StrOccurrenceCount(StringValue, ".") = 2 Then
+		Return PredefinedValue(StringValue);
+	EndIf;
+	XMLTypeName = XMLType(ValueType.Types()[0]).TypeName;
+	XMLTypeNameParts = StrSplit(XMLTypeName, ".");
+	MetadataClass = XMLTypeNameParts[0];
+	If StrEndsWith(MetadataClass, "Ref") Then
+		Manager = New(Left(MetadataClass, StrLen(MetadataClass) - 3) + "Manager." + XMLTypeNameParts[1]);
+		Link = GetObjectLinkBySearchString(Manager, StringValue);
+		If Link <> Undefined Then
+			Return Link;
+		EndIf;
+	EndIf;
+	ValueLen = StrLen(StringValue);
+	If ValueLen = 36
+		And StrOccurrenceCount(StringValue, "-") = 4 Then
+		Return New UUID(StringValue);
+	EndIf;
+	If ValueLen = 18 Or ValueLen = 19
+		And StrOccurrenceCount(StringValue, ".") = 2
+		And StrOccurrenceCount(StringValue, ":") = 2 Then
+		DateString = Mid(StringValue, 7, 4)
+					+ Mid(StringValue, 4, 2)
+					+ Mid(StringValue, 1, 2)
+					+ ?(ValueLen = 18, "0", "") 
+					+ StrReplace(Mid(StringValue, 12), ":", "");
+		Return Date(DateString);
+	EndIf;
+	Return StringValue;
+EndFunction
 
 &AtClient
 Procedure AddStepsByLanguage(Vanessa, AllTests, LangCode)
