@@ -398,8 +398,21 @@ Procedure ЯПроверяюИлиСоздаюДляРегистраСведен
 	ICheckOrCreateInformationRegisterRecords(ИмяРегистра, Значения);
 EndProcedure
 
+&AtClient
+Procedure ICheckOrCreateInformationRegisterRecordsUsingRecordSets(Val RegisterName, Val Values) Export
+	If Not Values.Count() Then
+		Return;
+	EndIf;
+	ICheckOrCreateInformationRegisterRecordsAtServer(RegisterName, Values, True);
+EndProcedure
+
+&AtClient
+Procedure ЯПроверяюИлиСоздаюДляРегистраСведенийЗаписиИспользуяНаборыЗаписей(Val ИмяРегистра, Val Значения) Export
+	ICheckOrCreateInformationRegisterRecordsUsingRecordSets(ИмяРегистра, Значения);
+EndProcedure
+
 &AtServerNoContext
-Procedure ICheckOrCreateInformationRegisterRecordsAtServer(RegisterName, Values)	
+Procedure ICheckOrCreateInformationRegisterRecordsAtServer(RegisterName, Values, UseRecordSets = False)	
 	ObjectValues = GetValueTableFromVanessaTableArray(Values);	
 	ObjectAttributes = New ValueTable;
 	FillColumnsByStandardAttributes(ObjectAttributes, "InformationRegisters", RegisterName);
@@ -416,21 +429,50 @@ Procedure ICheckOrCreateInformationRegisterRecordsAtServer(RegisterName, Values)
 		ObjectAttributes.Columns.Delete(ColumnName);
 	EndDo;
 	
-	RecorderColumn = ObjectAttributes.Columns.Find("Recorder");
-	If RecorderColumn = Undefined Then
-		RecorderColumn = ObjectAttributes.Columns.Find("Регистратор");
+	RegisterMetadata = Metadata.InformationRegisters[RegisterName];
+	MasterDimensions = New Array;
+	If RegisterMetadata.WriteMode = Metadata.ObjectProperties.RegisterWriteMode.RecorderSubordinate Then
+		RecorderColumn = ObjectAttributes.Columns.Find("Recorder");
+		If RecorderColumn = Undefined Then
+			RecorderColumn = ObjectAttributes.Columns.Find("Регистратор");
+		EndIf;
+		MasterDimensions.Add(RecorderColumn.Name);		
+	ElsIf UseRecordSets Then
+		For Each Dimension In RegisterMetadata.Dimensions Do
+			If Dimension.Master Then
+				MasterDimensions.Add(Dimension.Name);
+			EndIf;			
+		EndDo;		
+		If RegisterMetadata.InformationRegisterPeriodicity <> Metadata.ObjectProperties.InformationRegisterPeriodicity.Nonperiodical Then
+			PeriodColumn = ObjectAttributes.Columns.Find("Period");
+			If PeriodColumn = Undefined Then
+				PeriodColumn = ObjectAttributes.Columns.Find("Период");
+			EndIf;
+			If PeriodColumn <> Undefined Then
+				MasterDimensions.Add(PeriodColumn.Name);
+			EndIf;
+		EndIf;	
 	EndIf;
-	If RecorderColumn <> Undefined Then
-		RecorderColumnName = RecorderColumn.Name;
-		RecorderTable = ObjectValues.Copy(, RecorderColumnName);
-		RecorderTable.GroupBy(RecorderColumnName);
-		For Each RecorderRow In RecorderTable Do
-			RegisterSet = InformationRegisters[RegisterName].CreateRecordSet();
-			RecorderFilter = New Structure;
-			RecorderFilter.Insert(RecorderColumnName, RecorderRow[RecorderColumnName]);
-			FoundRows = ObjectValues.FindRows(RecorderFilter);
-			RecorderRef = GetObjectLinkFromObjectURL(RecorderRow[RecorderColumnName]);
-			RegisterSet.Filter[RecorderColumnName].Set(RecorderRef);
+	
+	If MasterDimensions.Count() Then
+		MasterDimensionsName = StrConcat(MasterDimensions, ",");
+		DimensionsTable = ObjectValues.Copy(, MasterDimensionsName);
+		DimensionsTable.GroupBy(MasterDimensionsName);
+		DimensionsFilter = New Structure(MasterDimensionsName);
+		For Each DimensionsSet In DimensionsTable Do
+			RegisterSet = InformationRegisters[RegisterName].CreateRecordSet();		
+			FillPropertyValues(DimensionsFilter, DimensionsSet);
+			FoundRows = ObjectValues.FindRows(DimensionsFilter);
+			For Each MasterDimension In MasterDimensions Do
+				If MasterDimension = "Period" Or MasterDimension = "Период" Then
+					// Autoconversion from string to date should work.
+					DimensionValue = DimensionsSet[MasterDimension];	
+				Else
+					DimensionValue = GetObjectLinkFromObjectURL(DimensionsSet[MasterDimension]);	
+				EndIf;
+				
+				RegisterSet.Filter[MasterDimension].Set(DimensionValue);	
+			EndDo;
 			For Each Row In FoundRows Do
 				Obj = RegisterSet.Add();
 				For Each Column In ObjectAttributes.Columns Do
@@ -440,8 +482,8 @@ Procedure ICheckOrCreateInformationRegisterRecordsAtServer(RegisterName, Values)
 					If Column.Name = "LineNumber" Or Column.Name = "НомерСтроки" Then
 						Continue;
 					EndIf;
-					If Column.Name = RecorderColumnName Then
-						Row[Column.Name] = RecorderRef;
+					If MasterDimensions.Find(Column.Name) <> Undefined Then
+						Obj[Column.Name] = RegisterSet.Filter[Column.Name].Value;
 						Continue;
 					EndIf;
 					FillTipicalObjectAttributesByValues(Obj, Row, Column);
@@ -1401,6 +1443,12 @@ Procedure AddStepsByLanguage(Vanessa, AllTests, LangCode)
 										, LocalizedStringsClient()["s5f_" + LangCode]
 										, "");
 	Vanessa.ДобавитьШагВМассивТестов(AllTests
+										, LocalizedStringsClient()["s12a_" + LangCode]
+										, LocalizedStringsClient()["s12b_" + LangCode]
+										, StrTemplate(LocalizedStringsClient()["s12c_" + LangCode], LocalizedStringsClient()["s12d_" + LangCode], "", "")
+										, LocalizedStringsClient()["s12f_" + LangCode]
+										, "");
+	Vanessa.ДобавитьШагВМассивТестов(AllTests
 										, LocalizedStringsClient()["s6a_" + LangCode]
 										, LocalizedStringsClient()["s6b_" + LangCode]
 										, StrTemplate(ScenarioAccumulationRegisterActionString(LangCode), LocalizedStringsClient()["s6d_" + LangCode], "", "")
@@ -2070,8 +2118,21 @@ Function LocalizedStringsServer()
 	ReturnData.Insert("s5d_ru", """ИмяРегистра""");
 	ReturnData.Insert("s5e_en", "Scenario: Create information register %1 records");
 	ReturnData.Insert("s5e_ru", "Сценарий: Создание записей для регистра сведений %1");
-	ReturnData.Insert("s5f_en", "Creates information register records");
-	ReturnData.Insert("s5f_ru", "Создаёт записи регистра сведений");
+	ReturnData.Insert("s5f_en", "Creates information register records, using record managers");
+	ReturnData.Insert("s5f_ru", "Создаёт записи регистра сведений, используя менеджеры записей.");
+	
+	ReturnData.Insert("s12a_en", "ICheckOrCreateInformationRegisterRecordsUsingRecordSets(RegisterName, Values)");
+	ReturnData.Insert("s12a_ru", "ЯПроверяюИлиСоздаюДляРегистраСведенийЗаписиИспользуяНаборыЗаписей(ИмяРегистра, Значения)");
+	ReturnData.Insert("s12b_en", "ICheckOrCreateInformationRegisterRecordsUsingRecordSets");
+	ReturnData.Insert("s12b_ru", "ЯПроверяюИлиСоздаюДляРегистраСведенийЗаписиИспользуяНаборыЗаписей");
+	ReturnData.Insert("s12c_en", "And I check or create information register %1 records using record sets:%2%3");
+	ReturnData.Insert("s12c_ru", "И я проверяю или создаю для регистра сведений %1 записи используя наборы записей:%2%3");
+	ReturnData.Insert("s12d_en", """RegisterName""");
+	ReturnData.Insert("s12d_ru", """ИмяРегистра""");
+	ReturnData.Insert("s12e_en", "Scenario: Create information register %1 records");
+	ReturnData.Insert("s12e_ru", "Сценарий: Создание записей для регистра сведений %1");
+	ReturnData.Insert("s12f_en", "Creates information register records, using record sets");
+	ReturnData.Insert("s12f_ru", "Создаёт записи регистра сведений, используя наборы записей");
 	
 	ReturnData.Insert("s6a_en", "ICheckOrCreateAccumulationRegisterRecords(RegisterName, Values)");
 	ReturnData.Insert("s6a_ru", "ЯПроверяюИлиСоздаюДляРегистраНакопленийЗаписи(ИмяРегистра, Значения)");
