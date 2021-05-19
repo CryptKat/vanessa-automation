@@ -165,14 +165,6 @@ Procedure ICheckOrCreateCatalogObjectsAtServer(ObjectName, Values)
 				Obj.DeletionMark = True;
 				Continue;
 			EndIf;
-			If Column.Name = "Parent" Or Column.Name = "Родитель" Then
-				Obj[Column.Name] = GetObjectLinkFromObjectURL(Row[Column.Name]);
-				Continue;
-			EndIf;
-			If Column.Name = "Owner" Or Column.Name = "Владелец" Then
-				Obj[Column.Name] = GetObjectLinkFromObjectURL(Row[Column.Name]);
-				Continue;
-			EndIf;
 			FillTipicalObjectAttributesByValues(Obj, Row, Column);
 		EndDo;
 		If Not ValueIsFilled(Obj.Code) Then
