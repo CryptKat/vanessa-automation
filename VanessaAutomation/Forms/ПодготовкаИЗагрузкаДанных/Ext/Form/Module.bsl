@@ -498,9 +498,9 @@ Procedure ICheckOrCreateInformationRegisterRecordsAtServer(RegisterName, Values,
 		For Each Row In ObjectValues Do
 			Obj = InformationRegisters[RegisterName].CreateRecordManager();
 			For Each Column In ObjectAttributes.Columns Do
-				If Row[Column.Name] = "" Then
-					Continue;
-				EndIf;
+				//If Row[Column.Name] = "" Then
+				//	Continue;
+				//EndIf;
 				FillTipicalObjectAttributesByValues(Obj, Row, Column);
 			EndDo;
 			Obj.Write(True);
