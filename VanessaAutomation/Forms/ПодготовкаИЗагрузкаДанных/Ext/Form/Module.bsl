@@ -1406,7 +1406,7 @@ Function ParseStringValue(Val StringValue, Val ValueType)
 	XMLTypeName = XMLType(ValueType.Types()[0]).TypeName;
 	XMLTypeNameParts = StrSplit(XMLTypeName, ".");
 	MetadataClass = XMLTypeNameParts[0];
-	If StrEndsWith(MetadataClass, "Ref") Then
+	If StrEndsWith(MetadataClass, "Ref") And ValueIsFilled(StringValue) Then
 		Manager = New(Left(MetadataClass, StrLen(MetadataClass) - 3) + "Manager." + XMLTypeNameParts[1]);
 		Link = GetObjectLinkBySearchString(Manager, StringValue);
 		If Link <> Undefined Then
